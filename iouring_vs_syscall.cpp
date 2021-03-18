@@ -92,7 +92,7 @@ int main(int argc, char *argv[])
         auto end = std::chrono::high_resolution_clock::now();
 
         double durationMs = (double)(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / 1000.0;
-        printf("io_uring -> %f ms\n", durationMs);
+        printf("io_uring -> %.1f ms\n", durationMs);
     }
 
     // syscalls
@@ -103,8 +103,6 @@ int main(int argc, char *argv[])
 
         for (int i = 0; i < 10000; i++) 
         {
-            // ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags);
-
             result = sendmsg(sFd, &smsg, 0);
 
             if (unlikely(result != 1400))
@@ -125,6 +123,6 @@ int main(int argc, char *argv[])
         auto end = std::chrono::high_resolution_clock::now();
 
         double durationMs = (double)(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) / 1000.0;
-        printf("syscalls -> %f ms\n", durationMs);
+        printf("syscalls -> %.1f ms\n", durationMs);
     }
 }
