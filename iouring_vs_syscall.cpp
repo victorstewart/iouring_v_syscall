@@ -75,8 +75,6 @@ int main(int argc, char *argv[])
             io_uring_prep_recvmsg(sqe, 0, &rmsg, 0);
             sqe->flags |= IOSQE_FIXED_FILE;
 
-            io_uring_submit(&ring);
-
             io_uring_submit_and_wait(&ring, 2);
 
             io_uring_for_each_cqe(&ring, head, cqe) 
