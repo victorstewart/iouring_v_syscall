@@ -72,8 +72,7 @@ int main(int argc, char *argv[])
 
         auto start = std::chrono::high_resolution_clock::now();
 
-        uint32_t sendIndex = 0;
-        uint32_t recvCount = 0;
+        uint32_t count = 0;
 
         for (int i = 0; i < 10'000; i++) 
         {
@@ -85,11 +84,11 @@ int main(int argc, char *argv[])
             io_uring_prep_recvmsg(sqe, 0, &rmsg, 0);
             sqe->flags |= IOSQE_FIXED_FILE;
 
-            if (unlikely(++sendIndex == sendBatchSize))
+            if (unlikely(++count == sendBatchSize))
             {
-                io_uring_submit_and_wait(&ring, sendIndex * 2);
-                io_uring_cq_advance(&ring, sendIndex * 2);
-                sendIndex = 0;
+                io_uring_submit_and_wait(&ring, sendBatchSize * 2);
+                io_uring_cq_advance(&ring, sendBatchSize * 2);
+                count = 0;
             }
         }
 
