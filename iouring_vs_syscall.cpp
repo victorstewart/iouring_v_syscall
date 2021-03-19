@@ -9,22 +9,29 @@
 
 int main(int argc, char *argv[])
 {
+    uint32_t sendBatchSize = 1;
+
     int rFd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+    setsockopt(rFd, SOL_SOCKET, SO_SNDBUF, (const uint32_t[]){ 10'000 * 1500 }, sizeof(uint32_t));
+    setsockopt(rFd, SOL_SOCKET, SO_RCVBUF, (const uint32_t[]){ 10'000 * 1500 }, sizeof(uint32_t));
 
     struct sockaddr_in6 *address = (struct sockaddr_in6 *)calloc(1, sizeof(struct sockaddr_in6));
     address->sin6_family = AF_INET6;
     address->sin6_flowinfo = 0;
-    address->sin6_port = htons(111);
+    address->sin6_port = htons(131);
     address->sin6_addr = in6addr_loopback;
 
     bind(rFd, (struct sockaddr *)address, sizeof(struct sockaddr_in6));
     listen(rFd, SOMAXCONN);
 
     int sFd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+    setsockopt(sFd, SOL_SOCKET, SO_SNDBUF, (const uint32_t[]){ 10'000 * 1500 }, sizeof(uint32_t));
+    setsockopt(sFd, SOL_SOCKET, SO_RCVBUF, (const uint32_t[]){ 10'000 * 1500 }, sizeof(uint32_t));
 
-    msghdr smsg = {};
+    struct msghdr smsg = {};
     {
-        smsg.msg_name = (struct sockaddr *)address;
+        smsg.msg_name = malloc(sizeof(struct sockaddr_in6));
+        memcpy(smsg.msg_name, address, sizeof(struct sockaddr_in6));
         smsg.msg_namelen = sizeof(struct sockaddr_in6);
 
         smsg.msg_iov = (struct iovec *)malloc(sizeof(struct iovec));
@@ -37,7 +44,7 @@ int main(int argc, char *argv[])
         smsg.msg_iovlen = 1;
     }
 
-    msghdr rmsg = {};
+    struct msghdr rmsg = {};
     {
         rmsg.msg_name = malloc(sizeof(struct sockaddr_in6));
         rmsg.msg_namelen = sizeof(struct sockaddr_in6);
@@ -47,8 +54,8 @@ int main(int argc, char *argv[])
         rmsg.msg_iov[0].iov_base = malloc(1400);
         rmsg.msg_iovlen = 1;
     }
-    
-    // io_uring test
+
+    // io_uring
     {
         int fds[2];
         fds[0] = rFd;
@@ -65,7 +72,10 @@ int main(int argc, char *argv[])
 
         auto start = std::chrono::high_resolution_clock::now();
 
-        for (int i = 0; i < 10000; i++) 
+        uint32_t sendIndex = 0;
+        uint32_t recvCount = 0;
+
+        for (int i = 0; i < 10'000; i++) 
         {
             sqe = io_uring_get_sqe(&ring);
             io_uring_prep_sendmsg(sqe, 1, &smsg, 0);
@@ -75,18 +85,12 @@ int main(int argc, char *argv[])
             io_uring_prep_recvmsg(sqe, 0, &rmsg, 0);
             sqe->flags |= IOSQE_FIXED_FILE;
 
-            io_uring_submit_and_wait(&ring, 2);
-
-            io_uring_for_each_cqe(&ring, head, cqe) 
+            if (unlikely(++sendIndex == sendBatchSize))
             {
-                if (unlikely(cqe->res != 1400))
-                {
-                    printf("iouring failed with result = %d\n", cqe->res);
-                    return 0;
-                }
-            }   
-
-            io_uring_cq_advance(&ring, 2);
+                io_uring_submit_and_wait(&ring, sendIndex * 2);
+                io_uring_cq_advance(&ring, sendIndex * 2);
+                sendIndex = 0;
+            }
         }
 
         auto end = std::chrono::high_resolution_clock::now();
